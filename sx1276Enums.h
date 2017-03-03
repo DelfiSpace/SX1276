@@ -12,8 +12,8 @@ License: Revised BSD License, see LICENSE.TXT file include in the project
 
 Maintainers: Miguel Luis, Gregory Cristian and Nicolas Huguenin
 */
-#ifndef __ENUMS_H__
-#define __ENUMS_H__
+#ifndef __SX1276ENUMS_H__
+#define __SX1276ENUMS_H__
 
 /*!
  * Radio driver internal state machine states definition
@@ -45,11 +45,11 @@ typedef struct
     unsigned char coderate;
     unsigned short preambleLen;
     unsigned short payloadLen;
-    boolean fixLen;
-    boolean crcOn;
-    boolean freqHopOn;
+    bool fixLen;
+    bool crcOn;
+    bool freqHopOn;
     unsigned char hopPeriod;
-    boolean iqInverted;
+    bool iqInverted;
     unsigned int timeout;
 }TxConfig_t;
 
@@ -64,12 +64,12 @@ typedef struct
     unsigned char coderate;
     unsigned short preambleLen;
     unsigned short payloadLen;
-    boolean fixLen;
-    boolean crcOn;
-    boolean freqHopOn;
+    bool fixLen;
+    bool crcOn;
+    bool freqHopOn;
     unsigned char hopPeriod;
-    boolean iqInverted;
+    bool iqInverted;
     unsigned int timeout;
 }RxConfig_t;
 
-#endif //__ENUMS_H__
+#endif //__SX1276ENUMS_H__

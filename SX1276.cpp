@@ -1,14 +1,14 @@
 #include "Energia.h"
-#include "SX1276.h"
-#include <SPI.h>
+#include <SX1276.h>
 
-#define RESET_PIN 13
+
+
+#define RESET_PIN 2 // changed from pin 13!
 #define CS_PIN 18
-#define ANTSWITCH 26
-#define DIO0 24
-#define DIO1 5
-#define DIO2 25
-#define DIO3 6
+#define DIO0 17     // changed from pin 24!
+#define DIO1 12 	//5
+//#define DIO2 33		//25
+//#define DIO3 6
 
 const FskBandwidth_t SX1276::FskBandwidths[] =
 {       
@@ -42,12 +42,11 @@ SX1276::SX1276()
 
 unsigned char SX1276::init()
 {
-    // set the antenna switch as disabled and then as output (to avoid a glitch during init)
-    digitalWrite(ANTSWITCH, HIGH);
-    pinMode(ANTSWITCH, OUTPUT);
+pinMode(BLUE_LED, OUTPUT);
 
     // monitor the PacketDone pin
     pinMode(DIO0, INPUT_PULLUP);
+
   
     // set the CS_PIN as disabled and then as output (to avoid a glitch during init)
     digitalWrite(CS_PIN, HIGH);
@@ -63,15 +62,13 @@ void SX1276::reset()
 {
     digitalWrite(RESET_PIN, LOW);
     pinMode(RESET_PIN, OUTPUT);
-    delay(50);
+    delayms(50);
     digitalWrite(RESET_PIN, HIGH);
 }
 
 bool SX1276::ping()
 {
-	if (readRegister(REG_VERSION) == 0x12)
-        return true;
-	return false;
+	return readRegister(REG_VERSION) == SAMTEC_ID;
 }
 
 void SX1276::setFrequency(unsigned long freq)
@@ -134,16 +131,6 @@ void SX1276::RxChainCalibration( void )
 
 void SX1276::setOpMode( unsigned char opMode )
 {
-    // control the antenna switch
-    if (opMode == RF_OPMODE_TRANSMITTER)
-    {
-         digitalWrite(ANTSWITCH, HIGH);
-    }
-    else
-    {
-         digitalWrite(ANTSWITCH, LOW);
-    }
-
     writeRegister(REG_OPMODE, (readRegister(REG_OPMODE) & RF_OPMODE_MASK) | opMode);
 }
 
@@ -200,7 +187,7 @@ void SX1276::setRxConfig( RxConfig_t* config )
     case MODEM_FSK:
         {
             // gaussian shaping, BT = 0.3
-            //writeRegister(REG_PARAMP, 0x60);
+            writeRegister(REG_PARAMP, 0x60);
             
             config->datarate = ( uint16_t )( ( double )XTAL_FREQ / ( double )config->datarate );
             writeRegister( REG_BITRATEMSB, ( uint8_t )( config->datarate >> 8 ) );
@@ -221,6 +208,9 @@ void SX1276::setRxConfig( RxConfig_t* config )
                 writeRegister( REG_PAYLOADLENGTH, 0xFF ); // Set payload length to the maximum 
             }
             
+            // configure the receiver to automatically restart after reception
+            writeRegister( REG_RXCONFIG, readRegister( REG_RXCONFIG ) | RF_RXCONFIG_RESTARTRXWITHOUTPLLLOCK );
+    
             writeRegister(REG_PACKETCONFIG1, RF_PACKETCONFIG1_DCFREE_WHITENING |
             								(( config->fixLen == 1 ) ? RF_PACKETCONFIG1_PACKETFORMAT_FIXED : RF_PACKETCONFIG1_PACKETFORMAT_VARIABLE ) |
             								(( config->crcOn == 1 ) ? RF_PACKETCONFIG1_CRC_ON : RF_PACKETCONFIG1_CRC_OFF));
@@ -369,7 +359,8 @@ void SX1276::setTxConfig( TxConfig_t* config )
     case MODEM_FSK:
         {
             // gaussian shaping, BT = 0.3
-            //writeRegister(REG_PARAMP, 0x60);
+            writeRegister(REG_PARAMP, 0x60);
+            
             config->fdev = (unsigned short)((double)config->fdev / FREQ_STEP);
             writeRegister(REG_FDEVMSB, (unsigned char)(config->fdev >> 8));
             writeRegister(REG_FDEVLSB, (unsigned char)(config->fdev & 0xFF));
@@ -564,14 +555,11 @@ void SX1276::readFifo(unsigned char *buffer, unsigned char size)
     read( 0, buffer, size );
 }
 
-void SX1276::send(unsigned char *buffer, unsigned char size)
+bool SX1276::send(unsigned char *buffer, unsigned char size)
 {
 	unsigned long previous = millis();
 	
 	// write the amount of bytes to send
-	//writeFifo( ( uint8_t* )&size, 1 );
-	//writeRegister( REG_PAYLOADLENGTH, size );
-	
 	writeRegister( REG_PAYLOADLENGTH, size );
 	
 	// write the buffer to the FIFO: FIFO size is only 64 bytes so the chunk must fit!
@@ -592,23 +580,32 @@ void SX1276::send(unsigned char *buffer, unsigned char size)
     
     // turn the transmitter ON
     setOpMode( RF_OPMODE_TRANSMITTER );
-        
-    while ((digitalRead(DIO0) != HIGH) && (millis() - previous < TIMEOUT))
+    unsigned short time = 0;
+    while ((digitalRead(DIO0) != HIGH) && (time < TIMEOUT))
     {
-		// Condition to avoid an overflow (DO NOT REMOVE)
-        if( millis() < previous )
-        {
-            previous = millis();
-        }
+		delayms(1);
+		time++;
     }
 
-    sleep();
+if (time >= TIMEOUT)
+{
+Serial.println("FAILURE");
+}
+else
+{
+Serial.print(time, DEC);
+Serial.println();
+}
+    // return true is timeout dd not elapse
+    return time < TIMEOUT;
 }
 
-unsigned char SX1276::receive( uint32_t timeout )
+unsigned char SX1276::receive( uint32_t timeout, void (*callback)( void ) )
 {
     bool rxContinuous = false;
     
+        attachInterrupt(DIO0, callback, RISING);
+        
     //switch( this->settings.Modem )
     //{
     //case MODEM_FSK:
@@ -807,4 +804,17 @@ signed short SX1276::getFrequencyError()
 {
     return (signed short)((double)(((unsigned short)readRegister(REG_FEIMSB) << 8 ) |
                                  ((unsigned short)readRegister(REG_FEILSB)       )) * FREQ_STEP);
+}
+
+void SX1276::delayms( unsigned short ms ) 
+{
+	unsigned int delayCycles = MAP_CS_getMCLK( ) / 9100;
+	
+	for (unsigned short j = 0; j < ms; j++)
+	{
+		for (int i = 0; i < delayCycles; i++) 
+		{
+			__no_operation();
+		}
+	}
 }

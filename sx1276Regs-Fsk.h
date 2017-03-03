@@ -1069,6 +1069,7 @@ Maintainer: Miguel Luis and Gregory Cristian
 /*!
  * RegVersion (Read Only)
  */
+#define SAMTEC_ID                                   0x12
 
 /*!
  * RegPllHop

@@ -1,12 +1,12 @@
 #ifndef __SX1276_H__
 #define __SX1276_H__
 
-#include <Energia.h>
+#include <driverlib.h>
 #include <SPI.h>
 
-#include "sx1276Regs-Fsk.h"
-#include "sx1276Regs-LoRa.h"
-#include "enums.h"
+#include <sx1276Regs-Fsk.h>
+#include <sx1276Regs-LoRa.h>
+#include <sx1276Enums.h>
 
 #define SX1276_OK      0
 #define SX1276_ERROR   1
@@ -57,16 +57,16 @@ public:
     void read(unsigned char, unsigned char *, unsigned char);
     void writeFifo(unsigned char *, unsigned char);
     void readFifo(unsigned char *, unsigned char);
-    void send(unsigned char *, unsigned char);
+    bool send(unsigned char *, unsigned char);
     void RxChainCalibration( void );
     unsigned char GetFskBandwidthRegValue( unsigned long );
-unsigned char receive( unsigned long );
-signed short GetRssi( RadioModems_t  );
-
+    unsigned char receive( unsigned long , void (*)( void ));
+    signed short GetRssi( RadioModems_t  );
 
 
 private:
 	
+    void delayms(unsigned short ms);
     char status;
     int f;
  static const FskBandwidth_t FskBandwidths[] ;

@@ -225,8 +225,30 @@ void SX1276::setRxConfig( RxConfig_t* config )
     {
     case MODEM_FSK:
         {
-            // gaussian shaping, BT = 0.3
-            writeRegister(REG_PARAMP, 0x60);
+            // pulse shaping
+        	switch( config->filtertype )
+        	{
+        	case BT_1_0:
+        		// gaussian shaping, BT = 1.0
+            	writeRegister(REG_PARAMP, RF_PARAMP_SHAPING_BT_1_0);
+            	break;
+            	
+            case BT_0_5:
+        		// gaussian shaping, BT = 0.5
+            	writeRegister(REG_PARAMP, RF_PARAMP_SHAPING_BT_0_5);
+            	break;
+            	
+            case BT_0_3:
+        		// gaussian shaping, BT = 0.3
+            	writeRegister(REG_PARAMP, RF_PARAMP_SHAPING_BT_0_3);
+            	break;
+            	
+            default:
+            case NONE:
+        		// gaussian shaping, BT = 1.0
+            	writeRegister(REG_PARAMP, RF_PARAMP_SHAPING_NONE);
+            	break;
+        	}
             
             config->datarate = ( uint16_t )( ( double )XTAL_FREQ / ( double )config->datarate );
             writeRegister( REG_BITRATEMSB, ( uint8_t )( config->datarate >> 8 ) );
@@ -399,8 +421,30 @@ void SX1276::setTxConfig( TxConfig_t* config )
     {
     case MODEM_FSK:
         {
-            // gaussian shaping, BT = 0.3
-            writeRegister(REG_PARAMP, 0x60);
+        	// pulse shaping and internal PA ramp up
+        	switch( config->filtertype )
+        	{
+        	case BT_1_0:
+        		// gaussian shaping, BT = 1.0
+            	writeRegister(REG_PARAMP, RF_PARAMP_SHAPING_BT_1_0 | RF_PARAMP_3400_US);
+            	break;
+            	
+            case BT_0_5:
+        		// gaussian shaping, BT = 0.5
+            	writeRegister(REG_PARAMP, RF_PARAMP_SHAPING_BT_0_5 | RF_PARAMP_3400_US);
+            	break;
+            	
+            case BT_0_3:
+        		// gaussian shaping, BT = 0.3
+            	writeRegister(REG_PARAMP, RF_PARAMP_SHAPING_BT_0_3 | RF_PARAMP_3400_US);
+            	break;
+            	
+            default:
+            case NONE:
+        		// gaussian shaping, BT = 1.0
+            	writeRegister(REG_PARAMP, RF_PARAMP_SHAPING_NONE | RF_PARAMP_3400_US);
+            	break;
+        	}
             
             config->fdev = (unsigned short)((double)config->fdev / FREQ_STEP);
             writeRegister(REG_FDEVMSB, (unsigned char)(config->fdev >> 8));

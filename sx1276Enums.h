@@ -27,6 +27,17 @@ typedef enum RadioState
 }RadioState_t;
 
 /*!
+ * Shaping filter values
+ */
+typedef enum ShapingFilter
+{
+    NONE = 0,
+    BT_1_0,
+    BT_0_5,
+    BT_0_3
+}ShapingFilter_t;
+
+/*!
  *    Type of the modem. [LORA / FSK]
  */
 typedef enum ModemType
@@ -39,6 +50,7 @@ typedef struct
 {
     RadioModems_t modem;
     unsigned char power;
+    ShapingFilter_t filtertype;
     unsigned int fdev;
     unsigned int bandwidth;
     unsigned int datarate;
@@ -57,6 +69,7 @@ typedef struct
 {
     RadioModems_t modem;
     unsigned char power;
+    ShapingFilter_t filtertype;
     unsigned int fdev;
     unsigned int bandwidth;
     unsigned int bandwidthAfc;

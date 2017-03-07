@@ -380,6 +380,12 @@ Maintainer: Miguel Luis and Gregory Cristian
 #define RF_PARAMP_LOWPNTXPLL_OFF                    0x10  // Default
 #define RF_PARAMP_LOWPNTXPLL_ON                     0x00
 
+#define RF_PARAMP_SHAPING_MASK                      0x60
+#define RF_PARAMP_SHAPING_BT_1_0                    0x20
+#define RF_PARAMP_SHAPING_BT_0_5                    0x40
+#define RF_PARAMP_SHAPING_BT_0_3                    0x60
+#define RF_PARAMP_SHAPING_NONE                      0x00
+
 #define RF_PARAMP_MASK                              0xF0
 #define RF_PARAMP_3400_US                           0x00
 #define RF_PARAMP_2000_US                           0x01

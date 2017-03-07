@@ -123,24 +123,22 @@ void SX1276::RxChainCalibration( void )
     // Cut the PA just in case, RFO output, power = -1 dBm
     writeRegister( REG_PACONFIG, 0x00 );
 
-    // Launch Rx chain calibration for LF band
-    writeRegister ( REG_IMAGECAL, ( readRegister( REG_IMAGECAL ) & RF_IMAGECAL_IMAGECAL_MASK ) | RF_IMAGECAL_IMAGECAL_START );
-    while( ( readRegister( REG_IMAGECAL ) & RF_IMAGECAL_IMAGECAL_RUNNING ) == RF_IMAGECAL_IMAGECAL_RUNNING )
-    {
-    }
-
-    // Sets a Frequency in HF band
-    //SetChannel( 868000000 );
-
-    // Launch Rx chain calibration for HF band 
-    //Write ( REG_IMAGECAL, ( Read( REG_IMAGECAL ) & RF_IMAGECAL_IMAGECAL_MASK ) | RF_IMAGECAL_IMAGECAL_START );
-    //while( ( Read( REG_IMAGECAL ) & RF_IMAGECAL_IMAGECAL_RUNNING ) == RF_IMAGECAL_IMAGECAL_RUNNING )
-    //{
-    //}
-
-    // Restore context
-    //writeRegister( REG_PACONFIG, regPaConfigInitVal );
-    //setFrequency( initialFreq );
+	if (initialFreq < 700000000)
+	{
+		// Launch Rx chain calibration for LF band
+		writeRegister ( REG_IMAGECAL, ( readRegister( REG_IMAGECAL ) & RF_IMAGECAL_IMAGECAL_MASK ) | RF_IMAGECAL_IMAGECAL_START );
+		while( ( readRegister( REG_IMAGECAL ) & RF_IMAGECAL_IMAGECAL_RUNNING ) == RF_IMAGECAL_IMAGECAL_RUNNING )
+		{
+		}
+	}
+	else
+	{
+    	// Launch Rx chain calibration for HF band 
+    	writeRegister ( REG_IMAGECAL, ( readRegister( REG_IMAGECAL ) & RF_IMAGECAL_IMAGECAL_MASK ) | RF_IMAGECAL_IMAGECAL_START );
+    	while( ( readRegister( REG_IMAGECAL ) & RF_IMAGECAL_IMAGECAL_RUNNING ) == RF_IMAGECAL_IMAGECAL_RUNNING )
+    	{
+    	}
+	}
 }
 
 void SX1276::setOpMode( unsigned char opMode )

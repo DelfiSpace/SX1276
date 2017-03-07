@@ -33,7 +33,6 @@ class SX1276
 {
 protected:
 
-    
 public:
     SX1276();
     virtual ~SX1276( ) {};
@@ -50,13 +49,6 @@ public:
     void setModem(RadioModems_t modem);
     void setTxConfig( TxConfig_t* );
     void setRxConfig( RxConfig_t* );
-    int get();
-    unsigned char readRegister(unsigned char);
-    void writeRegister(unsigned char, unsigned char);
-    void write(unsigned char, unsigned char *, unsigned char);
-    void read(unsigned char, unsigned char *, unsigned char);
-    void writeFifo(unsigned char *, unsigned char);
-    void readFifo(unsigned char *, unsigned char);
     bool send(unsigned char *, unsigned char);
     void RxChainCalibration( void );
     unsigned char GetFskBandwidthRegValue( unsigned long );
@@ -64,16 +56,19 @@ public:
     signed short GetRssi( RadioModems_t  );
 	unsigned char getRXData(unsigned char *, unsigned char );
 
-	
 private:
 	bool pktFixLen;
 	static volatile bool received;
+	unsigned char readRegister(unsigned char);
+    void writeRegister(unsigned char, unsigned char);
+    void write(unsigned char, unsigned char *, unsigned char);
+    void read(unsigned char, unsigned char *, unsigned char);
+    void writeFifo(unsigned char *, unsigned char);
+    void readFifo(unsigned char *, unsigned char);
 	static void GPIO_IRQHandler( void );
     void delayms(unsigned short );
     void delay100us(unsigned short );
-    char status;
-    int f;
- static const FskBandwidth_t FskBandwidths[] ;
+ 	static const FskBandwidth_t FskBandwidths[] ;
 };
 
 

@@ -10,6 +10,8 @@
 //#define DIO2 33		//25
 //#define DIO3 6
 
+/**** static data ****/
+
 const FskBandwidth_t SX1276::FskBandwidths[] =
 {       
     { 2600  , 0x17 },   
@@ -36,17 +38,29 @@ const FskBandwidth_t SX1276::FskBandwidths[] =
     { 300000, 0x00 }, // Invalid Badwidth
 };
 
+bool volatile SX1276::received = false;
+
+/**** ISR/IRQ Handles ****/
+
+void SX1276::GPIO_IRQHandler( void ) 
+{
+	// cleanup the interrupt flag
+	uint_fast16_t status = ROM_GPIO_getEnabledInterruptStatus(GPIO_PORT_P5); 
+	MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
+	// set the data received flag
+	received = true;
+}
+
+/**** Functions ****/
+
 SX1276::SX1276()
 {
 }
 
 unsigned char SX1276::init()
 {
-pinMode(BLUE_LED, OUTPUT);
-
     // monitor the PacketDone pin
     pinMode(DIO0, INPUT_PULLUP);
-
   
     // set the CS_PIN as disabled and then as output (to avoid a glitch during init)
     digitalWrite(CS_PIN, HIGH);
@@ -199,7 +213,9 @@ void SX1276::setRxConfig( RxConfig_t* config )
             writeRegister( REG_PREAMBLEMSB, ( uint8_t )( ( config->preambleLen >> 8 ) & 0xFF ) );
             writeRegister( REG_PREAMBLELSB, ( uint8_t )( config->preambleLen & 0xFF ) );
             
-            if( config->fixLen == 1 )
+            pktFixLen = config->fixLen;
+            
+            if( pktFixLen )
             {
                 writeRegister( REG_PAYLOADLENGTH, config->payloadLen );
             }
@@ -368,6 +384,9 @@ void SX1276::setTxConfig( TxConfig_t* config )
             config->fdev = (unsigned int)((double)(((unsigned int)readRegister(REG_FDEVMSB) << 8 ) |
                                                    ((unsigned int)readRegister(REG_FDEVLSB))) * FREQ_STEP);
 
+			// set packet length to be fixed or variable
+			pktFixLen = config->fixLen;
+			
             config->datarate = (unsigned short)((double)XTAL_FREQ / (double)config->datarate);
             writeRegister(REG_BITRATEMSB, (unsigned char)(config->datarate >> 8 ));
             writeRegister(REG_BITRATELSB, (unsigned char)(config->datarate & 0xFF));
@@ -518,7 +537,7 @@ void SX1276::read(unsigned char address, unsigned char *data, unsigned char size
     SPI.transfer(address & 0x7F);
 
     // read the value
-    for (unsigned char i = 0; i < size; i++)
+    for (unsigned short i = 0; i < (short)size; i++)
     {
     	data[i] = SPI.transfer(0);
     }
@@ -536,7 +555,7 @@ void SX1276::write(unsigned char address, unsigned char *data, unsigned char siz
     SPI.transfer(address | 0x80);
 
     // read the value
-    for (unsigned char i = 0; i < size; i++)
+    for (unsigned short i = 0; i < (short)size; i++)
     {
     	 SPI.transfer(data[i]);
     }
@@ -557,13 +576,23 @@ void SX1276::readFifo(unsigned char *buffer, unsigned char size)
 
 bool SX1276::send(unsigned char *buffer, unsigned char size)
 {
-	unsigned long previous = millis();
+	if (pktFixLen)
+	{
+		// write the amount of bytes to send
+		writeRegister( REG_PAYLOADLENGTH, size );
 	
-	// write the amount of bytes to send
-	writeRegister( REG_PAYLOADLENGTH, size );
-	
-	// write the buffer to the FIFO: FIFO size is only 64 bytes so the chunk must fit!
-	writeFifo( buffer, size );
+		// write the buffer to the FIFO: FIFO size is only 64 bytes so the chunk must fit!
+		writeFifo( buffer, size );
+	}
+	else
+	{
+		// write the amount of bytes to send
+		writeRegister( REG_PAYLOADLENGTH, 0xFF );
+		
+		writeFifo(&size, 1);
+		// write the buffer to the FIFO: FIFO size is only 64 bytes so the chunk must fit!
+		writeFifo( buffer, size );
+	}
 	
 	// DIO0=PacketSent
     // DIO1=FifoEmpty
@@ -581,197 +610,88 @@ bool SX1276::send(unsigned char *buffer, unsigned char size)
     // turn the transmitter ON
     setOpMode( RF_OPMODE_TRANSMITTER );
     unsigned short time = 0;
-    while ((digitalRead(DIO0) != HIGH) && (time < TIMEOUT))
+    while ((digitalRead(DIO0) != HIGH) && (time < 10 * TIMEOUT))
     {
-		delayms(1);
+		delay100us(1);
 		time++;
     }
 
-if (time >= TIMEOUT)
-{
-Serial.println("FAILURE");
-}
-else
-{
-Serial.print(time, DEC);
-Serial.println();
-}
     // return true is timeout dd not elapse
     return time < TIMEOUT;
 }
 
-unsigned char SX1276::receive( uint32_t timeout, void (*callback)( void ) )
+unsigned char SX1276::startReceiver( )
 {
-    bool rxContinuous = false;
+    //bool rxContinuous = false;
+
+	// FIXME: GPIO pin hardcoded here!
+    MAP_Interrupt_disableMaster();
+    MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
+    MAP_GPIO_setAsInputPin(GPIO_PORT_P5, GPIO_PIN7);
+    MAP_GPIO_interruptEdgeSelect(GPIO_PORT_P5, GPIO_PIN7, GPIO_LOW_TO_HIGH_TRANSITION);
+    MAP_GPIO_registerInterrupt(GPIO_PORT_P5, GPIO_IRQHandler);
+    MAP_GPIO_enableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
+    MAP_Interrupt_enableMaster();
     
-        attachInterrupt(DIO0, callback, RISING);
+    //attachInterrupt(DIO0, P5_IRQHandler, RISING);
         
-    //switch( this->settings.Modem )
-    //{
-    //case MODEM_FSK:
-        //{
-            //rxContinuous = this->settings.Fsk.RxContinuous;
-            
-            // DIO0=PayloadReady
-            // DIO1=FifoLevel
-            // DIO2=SyncAddr
-            // DIO3=FifoEmpty
-            // DIO4=Preamble
-            // DIO5=ModeReady
-            writeRegister( REG_DIOMAPPING1, ( readRegister( REG_DIOMAPPING1 ) & RF_DIOMAPPING1_DIO0_MASK &
-                                                                            RF_DIOMAPPING1_DIO1_MASK &
-                                                                            RF_DIOMAPPING1_DIO2_MASK ) |
-                                                                            RF_DIOMAPPING1_DIO0_00 |
-                                                                            RF_DIOMAPPING1_DIO2_11 );
-            
-            writeRegister( REG_DIOMAPPING2, ( readRegister( REG_DIOMAPPING2 ) & RF_DIOMAPPING2_DIO4_MASK &
-                                                                            RF_DIOMAPPING2_MAP_MASK ) | 
-                                                                            RF_DIOMAPPING2_DIO4_11 |
-                                                                            RF_DIOMAPPING2_MAP_PREAMBLEDETECT );
-            
-           /* this->settings.FskPacketHandler.FifoThresh = Read( REG_FIFOTHRESH ) & 0x3F;
-            
-            this->settings.FskPacketHandler.PreambleDetected = false;
-            this->settings.FskPacketHandler.SyncWordDetected = false;
-            this->settings.FskPacketHandler.NbBytes = 0;
-            this->settings.FskPacketHandler.Size = 0;*/
-        //}
-    /*    break;
-    case MODEM_LORA:
-        {
-            if( this->settings.LoRa.IqInverted == true )
-            {
-                Write( REG_LR_INVERTIQ, ( ( Read( REG_LR_INVERTIQ ) & RFLR_INVERTIQ_TX_MASK & RFLR_INVERTIQ_RX_MASK ) | RFLR_INVERTIQ_RX_ON | RFLR_INVERTIQ_TX_OFF ) );
-                Write( REG_LR_INVERTIQ2, RFLR_INVERTIQ2_ON );
-            }
-            else
-            {
-                Write( REG_LR_INVERTIQ, ( ( Read( REG_LR_INVERTIQ ) & RFLR_INVERTIQ_TX_MASK & RFLR_INVERTIQ_RX_MASK ) | RFLR_INVERTIQ_RX_OFF | RFLR_INVERTIQ_TX_OFF ) );
-                Write( REG_LR_INVERTIQ2, RFLR_INVERTIQ2_OFF );
-            }         
+	// DIO0=PayloadReady
+	// DIO1=FifoLevel
+	// DIO2=SyncAddr
+	// DIO3=FifoEmpty
+	// DIO4=Preamble
+	// DIO5=ModeReady
+	writeRegister( REG_DIOMAPPING1, ( readRegister( REG_DIOMAPPING1 ) & RF_DIOMAPPING1_DIO0_MASK &
+																	RF_DIOMAPPING1_DIO1_MASK &
+																	RF_DIOMAPPING1_DIO2_MASK ) |
+																	RF_DIOMAPPING1_DIO0_00 |
+																	RF_DIOMAPPING1_DIO2_11 );
+	
+	writeRegister( REG_DIOMAPPING2, ( readRegister( REG_DIOMAPPING2 ) & RF_DIOMAPPING2_DIO4_MASK &
+																	RF_DIOMAPPING2_MAP_MASK ) | 
+																	RF_DIOMAPPING2_DIO4_11 |
+																	RF_DIOMAPPING2_MAP_PREAMBLEDETECT );
+																	
+	// clear the receiver flag																
+	received = false;
+	
+	setOpMode( RF_OPMODE_RECEIVER );
         
+    // return 0 if the radio is in receiver mode, non-zero in case of error
+    return getOpMode() != RF_OPMODE_RECEIVER;
+}
 
-            // ERRATA 2.3 - Receiver Spurious Reception of a LoRa Signal
-            if( this->settings.LoRa.Bandwidth < 9 )
-            {
-                Write( REG_LR_DETECTOPTIMIZE, Read( REG_LR_DETECTOPTIMIZE ) & 0x7F );
-                Write( REG_LR_TEST30, 0x00 );
-                switch( this->settings.LoRa.Bandwidth )
-                {
-                case 0: // 7.8 kHz
-                    Write( REG_LR_TEST2F, 0x48 );
-                    SetChannel(this->settings.Channel + 7.81e3 );
-                    break;
-                case 1: // 10.4 kHz
-                    Write( REG_LR_TEST2F, 0x44 );
-                    SetChannel(this->settings.Channel + 10.42e3 );
-                    break;
-                case 2: // 15.6 kHz
-                    Write( REG_LR_TEST2F, 0x44 );
-                    SetChannel(this->settings.Channel + 15.62e3 );
-                    break;
-                case 3: // 20.8 kHz
-                    Write( REG_LR_TEST2F, 0x44 );
-                    SetChannel(this->settings.Channel + 20.83e3 );
-                    break;
-                case 4: // 31.2 kHz
-                    Write( REG_LR_TEST2F, 0x44 );
-                    SetChannel(this->settings.Channel + 31.25e3 );
-                    break;
-                case 5: // 41.4 kHz
-                    Write( REG_LR_TEST2F, 0x44 );
-                    SetChannel(this->settings.Channel + 41.67e3 );
-                    break;
-                case 6: // 62.5 kHz
-                    Write( REG_LR_TEST2F, 0x40 );
-                    break;
-                case 7: // 125 kHz
-                    Write( REG_LR_TEST2F, 0x40 );
-                    break;
-                case 8: // 250 kHz
-                    Write( REG_LR_TEST2F, 0x40 );
-                    break;
-                }
-            }
-            else
-            {
-                Write( REG_LR_DETECTOPTIMIZE, Read( REG_LR_DETECTOPTIMIZE ) | 0x80 );
-            }
+unsigned char SX1276::getRXData(unsigned char *data, unsigned char sz)
+{
+	if (received)
+	{
+		unsigned char size;
+		if (pktFixLen)
+		{
+			// FIXME: handle errors reading from FIFO: packet too long, packet too short
+			// re-initialize FIFO, etc
+			size = readRegister( REG_PAYLOADLENGTH);
+			// fixed length packet: read the data straight away
+			readFifo( data, size );
+		}
+		else
+		{
+			// variable length packet: first read the size and then read the data
+			readFifo(&size, 1);
+			readFifo(data, size);
+		}
 
-            rxContinuous = this->settings.LoRa.RxContinuous;
-            
-            if( this->settings.LoRa.FreqHopOn == true )
-            {
-                Write( REG_LR_IRQFLAGSMASK, //RFLR_IRQFLAGS_RXTIMEOUT |
-                                                  //RFLR_IRQFLAGS_RXDONE |
-                                                  //RFLR_IRQFLAGS_PAYLOADCRCERROR |
-                                                  RFLR_IRQFLAGS_VALIDHEADER |
-                                                  RFLR_IRQFLAGS_TXDONE |
-                                                  RFLR_IRQFLAGS_CADDONE |
-                                                  //RFLR_IRQFLAGS_FHSSCHANGEDCHANNEL |
-                                                  RFLR_IRQFLAGS_CADDETECTED );
-                                              
-                // DIO0=RxDone, DIO2=FhssChangeChannel
-                Write( REG_DIOMAPPING1, ( Read( REG_DIOMAPPING1 ) & RFLR_DIOMAPPING1_DIO0_MASK & RFLR_DIOMAPPING1_DIO2_MASK  ) | RFLR_DIOMAPPING1_DIO0_00 | RFLR_DIOMAPPING1_DIO2_00 );
-            }
-            else
-            {
-                Write( REG_LR_IRQFLAGSMASK, //RFLR_IRQFLAGS_RXTIMEOUT |
-                                                  //RFLR_IRQFLAGS_RXDONE |
-                                                  //RFLR_IRQFLAGS_PAYLOADCRCERROR |
-                                                  RFLR_IRQFLAGS_VALIDHEADER |
-                                                  RFLR_IRQFLAGS_TXDONE |
-                                                  RFLR_IRQFLAGS_CADDONE |
-                                                  RFLR_IRQFLAGS_FHSSCHANGEDCHANNEL |
-                                                  RFLR_IRQFLAGS_CADDETECTED );
-                                              
-                // DIO0=RxDone
-                Write( REG_DIOMAPPING1, ( Read( REG_DIOMAPPING1 ) & RFLR_DIOMAPPING1_DIO0_MASK ) | RFLR_DIOMAPPING1_DIO0_00 );
-            }
-            Write( REG_LR_FIFORXBASEADDR, 0 );
-            Write( REG_LR_FIFOADDRPTR, 0 );
-        }
-        break;
-    }
-*/
-    //memset( rxtxBuffer, 0, ( size_t )RX_BUFFER_SIZE );
-
-    //this->settings.State = RF_RX_RUNNING;
-    //if( timeout != 0 )
-    //{
-    //    rxTimeoutTimer.attach_us( this, &SX1276::OnTimeoutIrq, timeout );
-    //}
-
-    //if( this->settings.Modem == MODEM_FSK )
-    //{
-        setOpMode( RF_OPMODE_RECEIVER );
-        
-        /*if( rxContinuous == false )
-        {
-            rxTimeoutSyncWord.attach_us( this, &SX1276::OnTimeoutIrq, ( 8.0 * ( this->settings.Fsk.PreambleLen +
-                                                         ( ( Read( REG_SYNCCONFIG ) &
-                                                            ~RF_SYNCCONFIG_SYNCSIZE_MASK ) +
-                                                         1.0 ) + 10.0 ) /
-                                                        ( double )this->settings.Fsk.Datarate ) * 1e6 );
-        }
-    }
-    else
-    {
-        if( rxContinuous == true )
-        {
-            SetOpMode( RFLR_OPMODE_RECEIVER );
-        }
-        else
-        {
-            SetOpMode( RFLR_OPMODE_RECEIVER_SINGLE );
-        }
-    }*/
-    //while (digitalRead(DIO0) != HIGH) ;
-    
-    //while(!(readRegister(REG_IRQFLAGS1) & 0x01));
-    //radio.writeRegister(0, f | 0x02);
-    return 0;//readRegister(0);
- 
+		// configure the receiver to automatically restart after reception
+		writeRegister( REG_RXCONFIG, readRegister( REG_RXCONFIG ) | RF_RXCONFIG_RESTARTRXWITHOUTPLLLOCK );
+		
+		// clear the flag
+		received = false;
+		
+		return size;
+	}
+	{
+		return 0;
+	}
 }
 
 signed short SX1276::GetRssi( RadioModems_t modem )
@@ -811,6 +731,19 @@ void SX1276::delayms( unsigned short ms )
 	unsigned int delayCycles = MAP_CS_getMCLK( ) / 9100;
 	
 	for (unsigned short j = 0; j < ms; j++)
+	{
+		for (int i = 0; i < delayCycles; i++) 
+		{
+			__no_operation();
+		}
+	}
+}
+
+void SX1276::delay100us( unsigned short iterations ) 
+{
+	unsigned int delayCycles = MAP_CS_getMCLK( ) / 91000;
+	
+	for (unsigned short j = 0; j < iterations; j++)
 	{
 		for (int i = 0; i < delayCycles; i++) 
 		{

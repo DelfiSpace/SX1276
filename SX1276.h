@@ -60,13 +60,17 @@ public:
     bool send(unsigned char *, unsigned char);
     void RxChainCalibration( void );
     unsigned char GetFskBandwidthRegValue( unsigned long );
-    unsigned char receive( unsigned long , void (*)( void ));
+    unsigned char startReceiver( );
     signed short GetRssi( RadioModems_t  );
+	unsigned char getRXData(unsigned char *, unsigned char );
 
-
-private:
 	
-    void delayms(unsigned short ms);
+private:
+	bool pktFixLen;
+	static volatile bool received;
+	static void GPIO_IRQHandler( void );
+    void delayms(unsigned short );
+    void delay100us(unsigned short );
     char status;
     int f;
  static const FskBandwidth_t FskBandwidths[] ;

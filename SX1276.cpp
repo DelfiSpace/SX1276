@@ -38,17 +38,23 @@ const FskBandwidth_t SX1276::FskBandwidths[] =
     { 300000, 0x00 }, // Invalid Badwidth
 };
 
-bool volatile SX1276::received = false;
+bool volatile SX1276::DIO0event = false;
 
 /**** ISR/IRQ Handles ****/
-
+// FIXME: the interrupt is associated to DIO0 but it is run through Energia
 void SX1276::GPIO_IRQHandler( void ) 
 {
 	// cleanup the interrupt flag
 	uint_fast16_t status = ROM_GPIO_getEnabledInterruptStatus(GPIO_PORT_P5); 
 	MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
-	// set the data received flag
-	received = true;
+
+	// if RF_OPMODE_TRANSMITTER: packet transmitted
+	// if RF_OPMODE_RECEIVER: packet received
+	if ( status & GPIO_PIN7)
+	{
+		// set the data received flag
+		DIO0event = true;
+	}
 }
 
 /**** Functions ****/
@@ -59,9 +65,10 @@ SX1276::SX1276()
 
 unsigned char SX1276::init()
 {
+	// FIXME: GPIO pin hardcoded here!
     // monitor the PacketDone pin
-    pinMode(DIO0, INPUT_PULLUP);
-  
+    MAP_GPIO_setAsInputPin(GPIO_PORT_P5, GPIO_PIN7);
+    
     // set the CS_PIN as disabled and then as output (to avoid a glitch during init)
     digitalWrite(CS_PIN, HIGH);
     pinMode(CS_PIN, OUTPUT);
@@ -143,6 +150,26 @@ void SX1276::RxChainCalibration( void )
 
 void SX1276::setOpMode( unsigned char opMode )
 {
+	// if we are switching to transmit or receive mode, enable the interrupts
+	// otherwise, disable them
+	if ((opMode == RF_OPMODE_TRANSMITTER) || (opMode == RF_OPMODE_RECEIVER))
+	{
+		MAP_Interrupt_disableMaster();
+		MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
+		MAP_GPIO_interruptEdgeSelect(GPIO_PORT_P5, GPIO_PIN7, GPIO_LOW_TO_HIGH_TRANSITION);
+		MAP_GPIO_registerInterrupt(GPIO_PORT_P5, GPIO_IRQHandler);
+		MAP_GPIO_enableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
+		MAP_Interrupt_enableMaster();
+	}
+	else
+	{
+		MAP_Interrupt_disableMaster();
+		MAP_GPIO_disableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
+		MAP_GPIO_unregisterInterrupt(GPIO_PORT_P5);
+		MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
+		MAP_Interrupt_enableMaster();
+	}
+	// now we can change the operating mode...
     writeRegister(REG_OPMODE, (readRegister(REG_OPMODE) & RF_OPMODE_MASK) | opMode);
 }
 
@@ -535,7 +562,7 @@ void SX1276::read(unsigned char address, unsigned char *data, unsigned char size
     SPI.transfer(address & 0x7F);
 
     // read the value
-    for (unsigned short i = 0; i < (short)size; i++)
+    for (unsigned short i = 0; i < (unsigned short)size; i++)
     {
     	data[i] = SPI.transfer(0);
     }
@@ -553,7 +580,7 @@ void SX1276::write(unsigned char address, unsigned char *data, unsigned char siz
     SPI.transfer(address | 0x80);
 
     // read the value
-    for (unsigned short i = 0; i < (short)size; i++)
+    for (unsigned short i = 0; i < (unsigned short)size; i++)
     {
     	 SPI.transfer(data[i]);
     }
@@ -574,6 +601,11 @@ void SX1276::readFifo(unsigned char *buffer, unsigned char size)
 
 bool SX1276::send(unsigned char *buffer, unsigned char size)
 {
+	// set the FIFO threshold to its default value
+	writeRegister(REG_FIFOTHRESH, RF_FIFOTHRESH_FIFOTHRESHOLD_THRESHOLD);
+	
+	DIO0event = false;
+    
 	if (pktFixLen)
 	{
 		// write the amount of bytes to send
@@ -592,6 +624,14 @@ bool SX1276::send(unsigned char *buffer, unsigned char size)
 		writeFifo( buffer, size );
 	}
 	
+	// if the number of bytes to send is lower than the FIFO threshold for transmission, 
+	// ensure the FIFO will be flushed
+	if (size <= RF_FIFOTHRESH_FIFOTHRESHOLD_THRESHOLD)
+	{
+		writeRegister(REG_FIFOTHRESH, RF_FIFOTHRESH_TXSTARTCONDITION_FIFONOTEMPTY | 
+									  RF_FIFOTHRESH_FIFOTHRESHOLD_THRESHOLD );
+	}
+	
 	// DIO0=PacketSent
     // DIO1=FifoEmpty
     // DIO2=FifoFull
@@ -608,31 +648,18 @@ bool SX1276::send(unsigned char *buffer, unsigned char size)
     // turn the transmitter ON
     setOpMode( RF_OPMODE_TRANSMITTER );
     unsigned short time = 0;
-    while ((digitalRead(DIO0) != HIGH) && (time < 10 * TIMEOUT))
+    while (!DIO0event && (time < 10 * TIMEOUT))
     {
 		delay100us(1);
 		time++;
     }
-
+	
     // return true is timeout dd not elapse
     return time < TIMEOUT;
 }
 
 unsigned char SX1276::startReceiver( )
 {
-    //bool rxContinuous = false;
-
-	// FIXME: GPIO pin hardcoded here!
-    MAP_Interrupt_disableMaster();
-    MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
-    MAP_GPIO_setAsInputPin(GPIO_PORT_P5, GPIO_PIN7);
-    MAP_GPIO_interruptEdgeSelect(GPIO_PORT_P5, GPIO_PIN7, GPIO_LOW_TO_HIGH_TRANSITION);
-    MAP_GPIO_registerInterrupt(GPIO_PORT_P5, GPIO_IRQHandler);
-    MAP_GPIO_enableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
-    MAP_Interrupt_enableMaster();
-    
-    //attachInterrupt(DIO0, P5_IRQHandler, RISING);
-        
 	// DIO0=PayloadReady
 	// DIO1=FifoLevel
 	// DIO2=SyncAddr
@@ -651,7 +678,7 @@ unsigned char SX1276::startReceiver( )
 																	RF_DIOMAPPING2_MAP_PREAMBLEDETECT );
 																	
 	// clear the receiver flag																
-	received = false;
+	DIO0event = false;
 	
 	setOpMode( RF_OPMODE_RECEIVER );
         
@@ -661,7 +688,7 @@ unsigned char SX1276::startReceiver( )
 
 unsigned char SX1276::getRXData(unsigned char *data, unsigned char sz)
 {
-	if (received)
+	if (DIO0event)
 	{
 		unsigned char size;
 		if (pktFixLen)
@@ -683,13 +710,12 @@ unsigned char SX1276::getRXData(unsigned char *data, unsigned char sz)
 		writeRegister( REG_RXCONFIG, readRegister( REG_RXCONFIG ) | RF_RXCONFIG_RESTARTRXWITHOUTPLLLOCK );
 		
 		// clear the flag
-		received = false;
+		DIO0event = false;
 		
 		return size;
 	}
-	{
-		return 0;
-	}
+	
+	return 0;
 }
 
 signed short SX1276::GetRssi( RadioModems_t modem )

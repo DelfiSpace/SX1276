@@ -11,7 +11,7 @@
 #define SX1276_OK      0
 #define SX1276_ERROR   1
 
-// 2s timeout 
+// 2s timeout (in ms)
 #define TIMEOUT 2000
 
 /*!
@@ -58,7 +58,7 @@ public:
 
 private:
 	bool pktFixLen;
-	static volatile bool received;
+	static volatile bool DIO0event;
 	unsigned char readRegister(unsigned char);
     void writeRegister(unsigned char, unsigned char);
     void write(unsigned char, unsigned char *, unsigned char);

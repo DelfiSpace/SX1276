@@ -39,19 +39,14 @@ public:
     unsigned char init();
     void reset();
     bool ping();
-    void sleep();
-    void standby();
     void setFrequency(unsigned long);
     unsigned long getFrequency();
     signed short getFrequencyError();
-    void setOpMode(unsigned char);
-    unsigned char getOpMode();
-    void setModem(RadioModems_t modem);
+	void setIdleMode( bool );
     void setTxConfig( TxConfig_t* );
     void setRxConfig( RxConfig_t* );
     bool send(unsigned char *, unsigned char);
     void RxChainCalibration( void );
-    unsigned char GetFskBandwidthRegValue( unsigned long );
     unsigned char startReceiver( );
     signed short GetRssi( RadioModems_t  );
 	unsigned char getRXData(unsigned char *, unsigned char );
@@ -59,7 +54,13 @@ public:
 private:
 	bool pktFixLen;
 	static volatile bool DIO0event;
+	void setModem(RadioModems_t modem);
+	unsigned char GetFskBandwidthRegValue( unsigned long );
 	unsigned char readRegister(unsigned char);
+	void setOpMode(unsigned char);
+    unsigned char getOpMode();
+    void sleep();
+    void standby();
     void writeRegister(unsigned char, unsigned char);
     void write(unsigned char, unsigned char *, unsigned char);
     void read(unsigned char, unsigned char *, unsigned char);

@@ -76,7 +76,11 @@ unsigned char SX1276::init()
     // initialise SPI:
     SPI.begin();
 
+	// ensure the radio got a fresh start
     reset();
+    
+    // ensure the radio is in sleep mode
+    sleep();
 }
 
 void SX1276::reset()
@@ -171,6 +175,10 @@ void SX1276::setOpMode( unsigned char opMode )
 	}
 	// now we can change the operating mode...
     writeRegister(REG_OPMODE, (readRegister(REG_OPMODE) & RF_OPMODE_MASK) | opMode);
+    
+    // FIXME: implement an interrupt on DIO5 to ensure we exit the function 
+    // only when the mode was actually changed (and the transmitter / synthesizer are ready)
+    delayms(500);
 }
 
 unsigned char SX1276::getOpMode( )
@@ -643,6 +651,18 @@ void SX1276::readFifo(unsigned char *buffer, unsigned char size)
     read( 0, buffer, size );
 }
 
+void SX1276::setIdleMode( bool idle)
+{
+	if (idle)
+	{
+		setOpMode( RF_OPMODE_TRANSMITTER );
+	}
+	else
+	{
+		setOpMode( RF_OPMODE_SLEEP );
+	}
+}
+
 bool SX1276::send(unsigned char *buffer, unsigned char size)
 {
 	// set the FIFO threshold to its default value
@@ -689,8 +709,14 @@ bool SX1276::send(unsigned char *buffer, unsigned char size)
     writeRegister( REG_DIOMAPPING2, ( readRegister( REG_DIOMAPPING2 ) & RF_DIOMAPPING2_DIO4_MASK &
                                                         RF_DIOMAPPING2_MAP_MASK ) );
     
-    // turn the transmitter ON
-    setOpMode( RF_OPMODE_TRANSMITTER );
+	unsigned char previousMode = getOpMode();
+	
+	// switch to transmitter mode if we are not there yet
+	if ( previousMode != RF_OPMODE_TRANSMITTER)
+	{
+		// turn the transmitter ON
+    	setOpMode( RF_OPMODE_TRANSMITTER );
+	}
     unsigned short time = 0;
     while (!DIO0event && (time < 10 * TIMEOUT))
     {
@@ -698,6 +724,12 @@ bool SX1276::send(unsigned char *buffer, unsigned char size)
 		time++;
     }
 	
+	// set the radio in the old operational mode, if we were not it transmit mode
+	if (previousMode != RF_OPMODE_TRANSMITTER)
+    {
+    	// turn the transmitter ON
+    	setOpMode( previousMode );
+    }
     // return true is timeout dd not elapse
     return time < TIMEOUT;
 }

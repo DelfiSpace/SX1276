@@ -58,8 +58,7 @@ void SX1276::GPIO_IRQHandler( void )
 }
 
 /**** Functions ****/
-
-SX1276::SX1276()
+SX1276::SX1276(DSPI &spi): line(spi)
 {
 }
 
@@ -74,7 +73,7 @@ unsigned char SX1276::init()
     pinMode(CS_PIN, OUTPUT);
   
     // initialise SPI:
-    SPI.begin();
+	line.begin();
 
 	// ensure the radio got a fresh start
     reset();
@@ -579,10 +578,10 @@ void SX1276::writeRegister(unsigned char address, unsigned char value)
     digitalWrite(CS_PIN, LOW);
 
     // send in the address and value via SPI:
-    SPI.transfer(address | 0x80);
+	line.transfer(address | 0x80);
 
     // write the value
-    SPI.transfer(value);
+	line.transfer(value);
   
     // take the CS pin high to de-select the chip:
     digitalWrite(CS_PIN, HIGH);
@@ -594,10 +593,10 @@ unsigned char SX1276::readRegister(unsigned char address)
     digitalWrite(CS_PIN, LOW);
 
     // send in the address
-    SPI.transfer(address & 0x7F);
+	line.transfer(address & 0x7F);
 
     // read the value
-    unsigned char val = SPI.transfer(0);
+	unsigned char val = line.transfer(0);
   
     // take the CS pin high to de-select the chip:
     digitalWrite(CS_PIN, HIGH);
@@ -611,12 +610,12 @@ void SX1276::read(unsigned char address, unsigned char *data, unsigned char size
     digitalWrite(CS_PIN, LOW);
 
     // send in the address
-    SPI.transfer(address & 0x7F);
+	line.transfer(address & 0x7F);
 
     // read the value
     for (unsigned short i = 0; i < (unsigned short)size; i++)
     {
-    	data[i] = SPI.transfer(0);
+		data[i] = line.transfer(0);
     }
     
     // take the CS pin high to de-select the chip:
@@ -629,12 +628,12 @@ void SX1276::write(unsigned char address, unsigned char *data, unsigned char siz
     digitalWrite(CS_PIN, LOW);
 
     // send in the address
-    SPI.transfer(address | 0x80);
+	line.transfer(address & 0x80);
 
     // read the value
     for (unsigned short i = 0; i < (unsigned short)size; i++)
     {
-    	 SPI.transfer(data[i]);
+		 line.transfer(data[i]);
     }
     
     // take the CS pin high to de-select the chip:

@@ -2,7 +2,7 @@
 #define __SX1276_H__
 
 #include <driverlib.h>
-#include <SPI.h>
+#include <DSPI.h>
 
 #include <sx1276Regs-Fsk.h>
 #include <sx1276Regs-LoRa.h>
@@ -32,9 +32,10 @@ typedef struct
 class SX1276
 {
 protected:
+	DSPI &line;
 
 public:
-    SX1276();
+	SX1276(DSPI &spi);
     virtual ~SX1276( ) {};
     unsigned char init();
     void reset();

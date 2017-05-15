@@ -46,9 +46,19 @@ typedef enum ModemType
     MODEM_LORA
 }RadioModems_t;
 
+/*!
+ *    Packet handler mode
+ */
+typedef enum PacketType
+{
+    PACKET_MODE = 0,
+    CONTINUOUS_MODE
+}PacketType_t;
+
 typedef struct
 {
     RadioModems_t modem;
+    PacketType_t mode;
     unsigned char power;
     ShapingFilter_t filtertype;
     unsigned int fdev;
@@ -68,6 +78,7 @@ typedef struct
 typedef struct
 {
     RadioModems_t modem;
+    PacketType_t mode;
     unsigned char power;
     ShapingFilter_t filtertype;
     unsigned int fdev;

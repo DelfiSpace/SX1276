@@ -288,12 +288,9 @@ void SX1276::setRxConfig( RxConfig_t* config )
 			if (config->mode == PACKET_MODE)
 			{
 				writeRegister(REG_PACKETCONFIG2, 0x40); 		//enable packet mode
-				writeRegister( REG_OOKPEAK, 0x28); 				// force synchroniser on
 			}
 			else
 			{
-				writeRegister( REG_PAYLOADLENGTH, 0xFF );		// enable continuous mode
-				writeRegister( REG_OOKPEAK, 0x28); 				// force synchroniser on
 			}
 			
 			// set the synch word
@@ -496,7 +493,6 @@ void SX1276::setTxConfig( TxConfig_t* config )
 			}
 			else
 			{
-				writeRegister( REG_PAYLOADLENGTH, 0xFF );		// enable continuous mode
 				writeRegister( REG_OOKPEAK, 0x28); 				// force synchroniser on
 			}
 			

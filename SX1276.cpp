@@ -281,7 +281,7 @@ void SX1276::setRxConfig( RxConfig_t* config )
 			// configure the receiver to automatically restart after reception
 			writeRegister( REG_RXCONFIG, readRegister( REG_RXCONFIG ) | RF_RXCONFIG_RESTARTRXWITHOUTPLLLOCK );
 	
-			writeRegister(REG_PACKETCONFIG1, RF_PACKETCONFIG1_DCFREE_WHITENING |
+			writeRegister(REG_PACKETCONFIG1, (( config->whitening ) ? RF_PACKETCONFIG1_DCFREE_WHITENING : RF_PACKETCONFIG1_DCFREE_OFF ) |
 											(( config->fixLen == 1 ) ? RF_PACKETCONFIG1_PACKETFORMAT_FIXED : RF_PACKETCONFIG1_PACKETFORMAT_VARIABLE ) |
 											(( config->crcOn == 1 ) ? RF_PACKETCONFIG1_CRC_ON : RF_PACKETCONFIG1_CRC_OFF));
 											
@@ -485,7 +485,7 @@ void SX1276::setTxConfig( TxConfig_t* config )
 			writeRegister(REG_PREAMBLEMSB, (config->preambleLen >> 8) & 0x00FF);
 			writeRegister(REG_PREAMBLELSB, config->preambleLen & 0xFF);
 
-			writeRegister(REG_PACKETCONFIG1, RF_PACKETCONFIG1_DCFREE_WHITENING |
+			writeRegister(REG_PACKETCONFIG1, (( config->whitening ) ? RF_PACKETCONFIG1_DCFREE_WHITENING : RF_PACKETCONFIG1_DCFREE_OFF ) |
 											(( config->fixLen == 1 ) ? RF_PACKETCONFIG1_PACKETFORMAT_FIXED : RF_PACKETCONFIG1_PACKETFORMAT_VARIABLE ) |
 											(( config->crcOn == 1 ) ? RF_PACKETCONFIG1_CRC_ON : RF_PACKETCONFIG1_CRC_OFF));
 											

@@ -67,6 +67,7 @@ typedef struct
     unsigned char coderate;
     unsigned short preambleLen;
     unsigned short payloadLen;
+    bool whitening;
     bool fixLen;
     bool crcOn;
     bool freqHopOn;
@@ -88,6 +89,7 @@ typedef struct
     unsigned char coderate;
     unsigned short preambleLen;
     unsigned short payloadLen;
+    bool whitening;
     bool fixLen;
     bool crcOn;
     bool freqHopOn;

@@ -60,8 +60,25 @@ void SX1276::GPIO_IRQHandler( void )
 /**** Functions ****/
 SX1276::SX1276(DSPI &spi): line(spi)
 {
+	bitModeSPI = 0;
 }
 
+void SX1276::enableBitMode(DSPI &bitspi, void(*rxHandler)( uint8_t ), uint8_t(*txHandler)( void ))
+{
+	bitModeSPI = &bitspi;
+	bitModeSPI->setSlaveMode();
+	bitModeSPI->begin();
+	bitModeSPI->onTransmit(txHandler);
+	bitModeSPI->onReceive(rxHandler);
+}
+
+void SX1276::disableBitMode()
+{
+	bitModeSPI = 0;
+	bitModeSPI->onTransmit(0);
+	bitModeSPI->onReceive(0);
+}
+	
 unsigned char SX1276::init()
 {
 	// FIXME: GPIO pin hardcoded here!
@@ -153,24 +170,28 @@ void SX1276::RxChainCalibration( void )
 
 void SX1276::setOpMode( unsigned char opMode )
 {
-	// if we are switching to transmit or receive mode, enable the interrupts
-	// otherwise, disable them
-	if ((opMode == RF_OPMODE_TRANSMITTER) || (opMode == RF_OPMODE_RECEIVER))
+	// only enable the interrupts if we are in packet mode
+	if (!bitModeSPI)
 	{
-		MAP_Interrupt_disableMaster();
-		MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
-		MAP_GPIO_interruptEdgeSelect(GPIO_PORT_P5, GPIO_PIN7, GPIO_LOW_TO_HIGH_TRANSITION);
-		MAP_GPIO_registerInterrupt(GPIO_PORT_P5, GPIO_IRQHandler);
-		MAP_GPIO_enableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
-		MAP_Interrupt_enableMaster();
-	}
-	else
-	{
-		MAP_Interrupt_disableMaster();
-		MAP_GPIO_disableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
-		MAP_GPIO_unregisterInterrupt(GPIO_PORT_P5);
-		MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
-		MAP_Interrupt_enableMaster();
+		// if we are switching to transmit or receive mode, enable the interrupts
+		// otherwise, disable them
+		if ((opMode == RF_OPMODE_TRANSMITTER) || (opMode == RF_OPMODE_RECEIVER))
+		{
+			MAP_Interrupt_disableMaster();
+			MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
+			MAP_GPIO_interruptEdgeSelect(GPIO_PORT_P5, GPIO_PIN7, GPIO_LOW_TO_HIGH_TRANSITION);
+			MAP_GPIO_registerInterrupt(GPIO_PORT_P5, GPIO_IRQHandler);
+			MAP_GPIO_enableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
+			MAP_Interrupt_enableMaster();
+		}
+		else
+		{
+			MAP_Interrupt_disableMaster();
+			MAP_GPIO_disableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
+			MAP_GPIO_unregisterInterrupt(GPIO_PORT_P5);
+			MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
+			MAP_Interrupt_enableMaster();
+		}
 	}
 	// now we can change the operating mode...
 	writeRegister(REG_OPMODE, (readRegister(REG_OPMODE) & RF_OPMODE_MASK) | opMode);
@@ -285,9 +306,9 @@ void SX1276::setRxConfig( RxConfig_t* config )
 											(( config->fixLen == 1 ) ? RF_PACKETCONFIG1_PACKETFORMAT_FIXED : RF_PACKETCONFIG1_PACKETFORMAT_VARIABLE ) |
 											(( config->crcOn == 1 ) ? RF_PACKETCONFIG1_CRC_ON : RF_PACKETCONFIG1_CRC_OFF));
 											
-			if (config->mode == PACKET_MODE)
+			if (!bitModeSPI)
 			{
-				writeRegister(REG_PACKETCONFIG2, 0x40); 			//enable packet mode
+				writeRegister(REG_PACKETCONFIG2, 0x40); 			// enable packet mode
 				writeRegister( REG_OOKPEAK, 0x28 ); 				// force synchroniser on
 			}
 			else
@@ -489,7 +510,7 @@ void SX1276::setTxConfig( TxConfig_t* config )
 											(( config->fixLen == 1 ) ? RF_PACKETCONFIG1_PACKETFORMAT_FIXED : RF_PACKETCONFIG1_PACKETFORMAT_VARIABLE ) |
 											(( config->crcOn == 1 ) ? RF_PACKETCONFIG1_CRC_ON : RF_PACKETCONFIG1_CRC_OFF));
 											
-			if (config->mode == PACKET_MODE)
+			if (!bitModeSPI)
 			{
 				writeRegister(REG_PACKETCONFIG2, 0x40); 		//enable packet mode
 				writeRegister( REG_OOKPEAK, 0x28); 				// force synchroniser on
@@ -685,6 +706,12 @@ void SX1276::setIdleMode( bool idle)
 
 bool SX1276::send(unsigned char *buffer, unsigned char size)
 {
+	// send is only working in packet mode
+	if (bitModeSPI)
+	{
+		return false;
+	}
+	
 	// set the FIFO threshold to its default value
 	writeRegister(REG_FIFOTHRESH, RF_FIFOTHRESH_FIFOTHRESHOLD_THRESHOLD);
 	
@@ -750,7 +777,7 @@ bool SX1276::send(unsigned char *buffer, unsigned char size)
 		// turn the transmitter ON
 		setOpMode( previousMode );
 	}
-	// return true is timeout dd not elapse
+	// return true if timeout did not elapse
 	return time < TIMEOUT;
 }
 
@@ -784,6 +811,12 @@ unsigned char SX1276::startReceiver( )
 
 unsigned char SX1276::getRXData(unsigned char *data, unsigned char sz)
 {
+	// getRXData is only working in packet mode
+	if (bitModeSPI)
+	{
+		return 0;
+	}
+	
 	if (DIO0event)
 	{
 		unsigned char size;

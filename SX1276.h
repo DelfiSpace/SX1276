@@ -33,6 +33,7 @@ class SX1276
 {
 protected:
 	DSPI &line;
+	DSPI *bitModeSPI;
 
 public:
 	SX1276(DSPI &spi);
@@ -51,6 +52,8 @@ public:
 	unsigned char startReceiver( );
 	signed short GetRssi( RadioModems_t	 );
 	unsigned char getRXData(unsigned char *, unsigned char );
+	void enableBitMode(DSPI& bitspi, void(*rxHandler)( uint8_t ), uint8_t(*txHandler)( void ));
+	void disableBitMode();
 
 private:
 	bool pktFixLen;

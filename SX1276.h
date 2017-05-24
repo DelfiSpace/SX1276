@@ -44,7 +44,7 @@ public:
 	void setFrequency(unsigned long);
 	unsigned long getFrequency();
 	signed short getFrequencyError();
-	void setIdleMode( bool );
+	unsigned char setIdleMode( bool );
 	void setTxConfig( TxConfig_t* );
 	void setRxConfig( RxConfig_t* );
 	bool send(unsigned char *, unsigned char);
@@ -61,7 +61,7 @@ private:
 	void setModem(RadioModems_t modem);
 	unsigned char GetFskBandwidthRegValue( unsigned long );
 	unsigned char readRegister(unsigned char);
-	void setOpMode(unsigned char);
+	unsigned char setOpMode(unsigned char);
 	unsigned char getOpMode();
 	void sleep();
 	void standby();

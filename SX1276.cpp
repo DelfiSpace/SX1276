@@ -168,7 +168,7 @@ void SX1276::RxChainCalibration( void )
 	}
 }
 
-void SX1276::setOpMode( unsigned char opMode )
+unsigned char SX1276::setOpMode( unsigned char opMode )
 {
 	// only enable the interrupts if we are in packet mode
 	if (!bitModeSPI)
@@ -177,28 +177,34 @@ void SX1276::setOpMode( unsigned char opMode )
 		// otherwise, disable them
 		if ((opMode == RF_OPMODE_TRANSMITTER) || (opMode == RF_OPMODE_RECEIVER))
 		{
-			MAP_Interrupt_disableMaster();
 			MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
 			MAP_GPIO_interruptEdgeSelect(GPIO_PORT_P5, GPIO_PIN7, GPIO_LOW_TO_HIGH_TRANSITION);
 			MAP_GPIO_registerInterrupt(GPIO_PORT_P5, GPIO_IRQHandler);
 			MAP_GPIO_enableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
-			MAP_Interrupt_enableMaster();
-		}
-		else
-		{
-			MAP_Interrupt_disableMaster();
-			MAP_GPIO_disableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
-			MAP_GPIO_unregisterInterrupt(GPIO_PORT_P5);
-			MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
-			MAP_Interrupt_enableMaster();
 		}
 	}
+	
 	// now we can change the operating mode...
 	writeRegister(REG_OPMODE, (readRegister(REG_OPMODE) & RF_OPMODE_MASK) | opMode);
 	
-	// FIXME: implement an interrupt on DIO5 to ensure we exit the function 
-	// only when the mode was actually changed (and the transmitter / synthesizer are ready)
-	delayms(500);
+	unsigned short time = 0;
+	while ((getOpMode() != opMode) && (time < 10 * TIMEOUT))
+	{
+		delay100us(1);
+		time++;
+	}
+	
+	// only enable the interrupts if we are in packet mode
+	if (!bitModeSPI)
+	{
+		// if we are not switching to transmit or receive mode, disable the interrupts
+		if ((opMode != RF_OPMODE_TRANSMITTER) && (opMode != RF_OPMODE_RECEIVER))
+		{
+			MAP_GPIO_disableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
+			MAP_GPIO_unregisterInterrupt(GPIO_PORT_P5);
+		}
+	}
+	return time < TIMEOUT;
 }
 
 unsigned char SX1276::getOpMode( )
@@ -692,15 +698,15 @@ void SX1276::readFifo(unsigned char *buffer, unsigned char size)
 	read( 0, buffer, size );
 }
 
-void SX1276::setIdleMode( bool idle)
+unsigned char SX1276::setIdleMode( bool idle )
 {
 	if (idle)
 	{
-		setOpMode( RF_OPMODE_TRANSMITTER );
+		return setOpMode( RF_OPMODE_TRANSMITTER );
 	}
 	else
 	{
-		setOpMode( RF_OPMODE_SLEEP );
+		return setOpMode( RF_OPMODE_SLEEP );
 	}
 }
 
@@ -803,10 +809,7 @@ unsigned char SX1276::startReceiver( )
 	// clear the receiver flag																
 	DIO0event = false;
 	
-	setOpMode( RF_OPMODE_RECEIVER );
-		
-	// return 0 if the radio is in receiver mode, non-zero in case of error
-	return getOpMode() != RF_OPMODE_RECEIVER;
+	return setOpMode( RF_OPMODE_RECEIVER );
 }
 
 unsigned char SX1276::getRXData(unsigned char *data, unsigned char sz)

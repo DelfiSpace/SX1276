@@ -89,6 +89,10 @@ unsigned char SX1276::init()
 	digitalWrite(CS_PIN, HIGH);
 	pinMode(CS_PIN, OUTPUT);
   
+  	// set the RESET_PIN as disabled and then as output (to avoid a glitch during init)
+	digitalWrite(RESET_PIN, HIGH);
+	pinMode(RESET_PIN, OUTPUT);
+	
 	// initialise SPI:
 	line.begin();
 
@@ -102,8 +106,7 @@ unsigned char SX1276::init()
 void SX1276::reset()
 {
 	digitalWrite(RESET_PIN, LOW);
-	pinMode(RESET_PIN, OUTPUT);
-	delayms(50);
+	delayms(10);
 	digitalWrite(RESET_PIN, HIGH);
 }
 

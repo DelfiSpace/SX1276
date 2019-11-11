@@ -1,5 +1,4 @@
-#include "Energia.h"
-#include <SX1276.h>
+#include "SX1276.h"
 
 
 
@@ -45,20 +44,36 @@ bool volatile SX1276::DIO0event = false;
 void SX1276::GPIO_IRQHandler( void ) 
 {
 	// cleanup the interrupt flag
-	uint_fast16_t status = ROM_GPIO_getEnabledInterruptStatus(GPIO_PORT_P5); 
-	MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
+	//uint_fast16_t status = ROM_GPIO_getEnabledInterruptStatus(pins->DIO0Port);
+	//MAP_GPIO_clearInterruptFlag(pins->DIO0Port, pins->DIO0Pin);
 
 	// if RF_OPMODE_TRANSMITTER: packet transmitted
 	// if RF_OPMODE_RECEIVER: packet received
-	if ( status & GPIO_PIN7)
+	//if ( status & pins->DIO0Pin)
 	{
 		// set the data received flag
 		DIO0event = true;
 	}
 }
 
+void SX1276::GPIO_IRQHandler2( void )
+{
+    // cleanup the interrupt flag
+    uint_fast16_t status = ROM_GPIO_getEnabledInterruptStatus(pins->DIO0Port);
+    MAP_GPIO_clearInterruptFlag(pins->DIO0Port, pins->DIO0Pin);
+
+    // if RF_OPMODE_TRANSMITTER: packet transmitted
+    // if RF_OPMODE_RECEIVER: packet received
+    if ( status & pins->DIO0Pin)
+    {
+        // set the data received flag
+        DIO0event = true;
+    }
+}
+
 /**** Functions ****/
-SX1276::SX1276(DSPI &spi): line(spi)
+SX1276::SX1276(DSPI &spi, const SX1276Pins *pinsDefinition):
+        line(spi), pins(pinsDefinition)
 {
 	bitModeSPI = 0;
 }
@@ -83,15 +98,15 @@ unsigned char SX1276::init()
 {
 	// FIXME: GPIO pin hardcoded here!
 	// monitor the PacketDone pin
-	MAP_GPIO_setAsInputPin(GPIO_PORT_P5, GPIO_PIN7);
+	MAP_GPIO_setAsInputPin( pins->DIO0Port, pins->DIO0Pin );
 	
 	// set the CS_PIN as disabled and then as output (to avoid a glitch during init)
-	digitalWrite(CS_PIN, HIGH);
-	pinMode(CS_PIN, OUTPUT);
+    MAP_GPIO_setOutputHighOnPin( pins->CSPort, pins->CSPin );
+    MAP_GPIO_setAsOutputPin( pins->CSPort, pins->CSPin );
   
   	// set the RESET_PIN as disabled and then as output (to avoid a glitch during init)
-	digitalWrite(RESET_PIN, HIGH);
-	pinMode(RESET_PIN, OUTPUT);
+    MAP_GPIO_setOutputHighOnPin( pins->RESETPort, pins->RESETPin );
+    MAP_GPIO_setAsOutputPin( pins->RESETPort, pins->RESETPin );
 	
 	// initialise SPI:
 	line.begin();
@@ -105,9 +120,9 @@ unsigned char SX1276::init()
 
 void SX1276::reset()
 {
-	digitalWrite(RESET_PIN, LOW);
+    MAP_GPIO_setOutputLowOnPin( pins->RESETPort, pins->RESETPin );
 	delayms(10);
-	digitalWrite(RESET_PIN, HIGH);
+	MAP_GPIO_setOutputHighOnPin( pins->RESETPort, pins->RESETPin );
 }
 
 bool SX1276::ping()
@@ -180,10 +195,10 @@ unsigned char SX1276::setOpMode( unsigned char opMode )
 		// otherwise, disable them
 		if ((opMode == RF_OPMODE_TRANSMITTER) || (opMode == RF_OPMODE_RECEIVER))
 		{
-			MAP_GPIO_clearInterruptFlag(GPIO_PORT_P5, GPIO_PIN7);
-			MAP_GPIO_interruptEdgeSelect(GPIO_PORT_P5, GPIO_PIN7, GPIO_LOW_TO_HIGH_TRANSITION);
-			MAP_GPIO_registerInterrupt(GPIO_PORT_P5, GPIO_IRQHandler);
-			MAP_GPIO_enableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
+			MAP_GPIO_clearInterruptFlag( pins->DIO0Port, pins->DIO0Pin );
+			MAP_GPIO_interruptEdgeSelect( pins->DIO0Port, pins->DIO0Pin, GPIO_LOW_TO_HIGH_TRANSITION );
+			MAP_GPIO_registerInterrupt(pins->DIO0Port, pins->callback);
+			MAP_GPIO_enableInterrupt( pins->DIO0Port, pins->DIO0Pin );
 		}
 	}
 	
@@ -203,8 +218,8 @@ unsigned char SX1276::setOpMode( unsigned char opMode )
 		// if we are not switching to transmit or receive mode, disable the interrupts
 		if ((opMode != RF_OPMODE_TRANSMITTER) && (opMode != RF_OPMODE_RECEIVER))
 		{
-			MAP_GPIO_disableInterrupt(GPIO_PORT_P5, GPIO_PIN7);
-			MAP_GPIO_unregisterInterrupt(GPIO_PORT_P5);
+			MAP_GPIO_disableInterrupt( pins->RESETPort, pins->RESETPin );
+			MAP_GPIO_unregisterInterrupt( pins->RESETPort );
 		}
 	}
 	return time < TIMEOUT;
@@ -626,7 +641,7 @@ void SX1276::setTxConfig( TxConfig_t* config )
 void SX1276::writeRegister(unsigned char address, unsigned char value) 
 {
 	// take the CS pin low to select the chip:
-	digitalWrite(CS_PIN, LOW);
+    MAP_GPIO_setOutputLowOnPin( pins->CSPort, pins->CSPin );
 
 	// send in the address and value via SPI:
 	line.transfer(address | 0x80);
@@ -635,13 +650,13 @@ void SX1276::writeRegister(unsigned char address, unsigned char value)
 	line.transfer(value);
   
 	// take the CS pin high to de-select the chip:
-	digitalWrite(CS_PIN, HIGH);
+	MAP_GPIO_setOutputHighOnPin( pins->CSPort, pins->CSPin );
 }
 
 unsigned char SX1276::readRegister(unsigned char address) 
 {
 	// take the CS pin low to select the chip:
-	digitalWrite(CS_PIN, LOW);
+    MAP_GPIO_setOutputLowOnPin( pins->CSPort, pins->CSPin );
 
 	// send in the address
 	line.transfer(address & 0x7F);
@@ -650,7 +665,7 @@ unsigned char SX1276::readRegister(unsigned char address)
 	unsigned char val = line.transfer(0);
   
 	// take the CS pin high to de-select the chip:
-	digitalWrite(CS_PIN, HIGH);
+	MAP_GPIO_setOutputHighOnPin( pins->CSPort, pins->CSPin );
 
 	return val;
 }
@@ -658,7 +673,7 @@ unsigned char SX1276::readRegister(unsigned char address)
 void SX1276::read(unsigned char address, unsigned char *data, unsigned char size) 
 {
 	// take the CS pin low to select the chip:
-	digitalWrite(CS_PIN, LOW);
+    MAP_GPIO_setOutputLowOnPin( pins->CSPort, pins->CSPin );
 
 	// send in the address
 	line.transfer(address & 0x7F);
@@ -670,13 +685,13 @@ void SX1276::read(unsigned char address, unsigned char *data, unsigned char size
 	}
 	
 	// take the CS pin high to de-select the chip:
-	digitalWrite(CS_PIN, HIGH);
+	MAP_GPIO_setOutputHighOnPin( pins->CSPort, pins->CSPin );
 }
 
 void SX1276::write(unsigned char address, unsigned char *data, unsigned char size) 
 {
 	// take the CS pin low to select the chip:
-	digitalWrite(CS_PIN, LOW);
+    MAP_GPIO_setOutputLowOnPin( pins->CSPort, pins->CSPin );
 
 	// send in the address
 	line.transfer(address | 0x80);
@@ -688,7 +703,7 @@ void SX1276::write(unsigned char address, unsigned char *data, unsigned char siz
 	}
 	
 	// take the CS pin high to de-select the chip:
-	digitalWrite(CS_PIN, HIGH);
+	MAP_GPIO_setOutputHighOnPin( pins->CSPort, pins->CSPin );
 }
 
 void SX1276::writeFifo(unsigned char *buffer, unsigned char size)

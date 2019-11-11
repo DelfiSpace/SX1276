@@ -18,7 +18,7 @@
  * SX1276 definitions
  */
 #define XTAL_FREQ				32000000
-#define FREQ_STEP				61.03515625d
+#define FREQ_STEP				61.03515625f
 
 /*!
  * FSK bandwidth definition
@@ -29,14 +29,28 @@ typedef struct
 	uint8_t	 RegValue;
 }FskBandwidth_t;
 
+typedef struct
+{
+    unsigned long CSPort;
+    unsigned long CSPin;
+    unsigned long RESETPort;
+    unsigned long RESETPin;
+    unsigned long DIO0Port;
+    unsigned long DIO0Pin;
+    void(*callback)(  );
+
+} SX1276Pins;
+
 class SX1276
 {
 protected:
 	DSPI &line;
 	DSPI *bitModeSPI;
+    const SX1276Pins *pins;
+    SX1276 *instance;
 
 public:
-	SX1276(DSPI &spi);
+	SX1276( DSPI &spi, const SX1276Pins *pinsDefinition );
 	virtual ~SX1276( ) {};
 	unsigned char init();
 	void reset();
@@ -54,6 +68,7 @@ public:
 	unsigned char getRXData(unsigned char *, unsigned char );
 	void enableBitMode(DSPI& bitspi, void(*rxHandler)( uint8_t ), uint8_t(*txHandler)( void ));
 	void disableBitMode();
+    void GPIO_IRQHandler2( void );
 
 private:
 	bool pktFixLen;

@@ -40,23 +40,7 @@ const FskBandwidth_t SX1276::FskBandwidths[] =
 bool volatile SX1276::DIO0event = false;
 
 /**** ISR/IRQ Handles ****/
-// FIXME: the interrupt is associated to DIO0 but it is run through Energia
-void SX1276::GPIO_IRQHandler( void ) 
-{
-	// cleanup the interrupt flag
-	//uint_fast16_t status = ROM_GPIO_getEnabledInterruptStatus(pins->DIO0Port);
-	//MAP_GPIO_clearInterruptFlag(pins->DIO0Port, pins->DIO0Pin);
-
-	// if RF_OPMODE_TRANSMITTER: packet transmitted
-	// if RF_OPMODE_RECEIVER: packet received
-	//if ( status & pins->DIO0Pin)
-	{
-		// set the data received flag
-		DIO0event = true;
-	}
-}
-
-void SX1276::GPIO_IRQHandler2( void )
+void SX1276::GPIO_IRQHandler( void )
 {
     // cleanup the interrupt flag
     uint_fast16_t status = ROM_GPIO_getEnabledInterruptStatus(pins->DIO0Port);
@@ -96,7 +80,6 @@ void SX1276::disableBitMode()
 	
 unsigned char SX1276::init()
 {
-	// FIXME: GPIO pin hardcoded here!
 	// monitor the PacketDone pin
 	MAP_GPIO_setAsInputPin( pins->DIO0Port, pins->DIO0Pin );
 	
@@ -108,7 +91,7 @@ unsigned char SX1276::init()
     MAP_GPIO_setOutputHighOnPin( pins->RESETPort, pins->RESETPin );
     MAP_GPIO_setAsOutputPin( pins->RESETPort, pins->RESETPin );
 	
-	// initialise SPI:
+	// initialize SPI:
 	line.begin();
 
 	// ensure the radio got a fresh start

@@ -68,7 +68,7 @@ public:
 	unsigned char getRXData(unsigned char *, unsigned char );
 	void enableBitMode(DSPI& bitspi, void(*rxHandler)( uint8_t ), uint8_t(*txHandler)( void ));
 	void disableBitMode();
-    void GPIO_IRQHandler2( void );
+    void GPIO_IRQHandler( void );
 
 private:
 	bool pktFixLen;
@@ -85,7 +85,6 @@ private:
 	void read(unsigned char, unsigned char *, unsigned char);
 	void writeFifo(unsigned char *, unsigned char);
 	void readFifo(unsigned char *, unsigned char);
-	static void GPIO_IRQHandler( void );
 	void delayms(unsigned short );
 	void delay100us(unsigned short );
 	static const FskBandwidth_t FskBandwidths[] ;

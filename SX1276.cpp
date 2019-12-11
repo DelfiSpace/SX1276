@@ -65,8 +65,7 @@ SX1276::SX1276(DSPI &spi, const SX1276Pins *pinsDefinition):
 void SX1276::enableBitMode(DSPI &bitspi, void(*rxHandler)( uint8_t ), uint8_t(*txHandler)( void ))
 {
 	bitModeSPI = &bitspi;
-	bitModeSPI->setSlaveMode();
-	bitModeSPI->begin();
+	bitModeSPI->initSlave(DSPI::MODE0, DSPI::MSBFirst);
 	bitModeSPI->onTransmit(txHandler);
 	bitModeSPI->onReceive(rxHandler);
 }
@@ -92,7 +91,7 @@ unsigned char SX1276::init()
     MAP_GPIO_setAsOutputPin( pins->RESETPort, pins->RESETPin );
 	
 	// initialize SPI:
-	line.begin();
+	line.initMaster(DSPI::MODE0, DSPI::MSBFirst, 1000000);
 
 	// ensure the radio got a fresh start
 	reset();

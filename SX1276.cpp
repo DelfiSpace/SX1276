@@ -332,6 +332,9 @@ void SX1276::setRxConfig( RxConfig_t* config )
 			writeRegister(REG_SYNCVALUE3, 0xDA);
 			writeRegister(REG_SYNCVALUE4, 0x26);
 
+			// set RSSI config
+			writeRegister(REG_RSSICONFIG, RF_RSSICONFIG_OFFSET_P_00_DB | RF_RSSICONFIG_SMOOTHING_256);
+
 		}
 		break;
 	/*case MODEM_LORA:

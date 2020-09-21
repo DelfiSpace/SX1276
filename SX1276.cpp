@@ -449,21 +449,23 @@ void SX1276::setTxConfig( TxConfig_t* config )
 	
 	unsigned char paConfig = readRegister(REG_PACONFIG);
 	unsigned char paDac = readRegister(REG_PADAC);
+//
+//	paConfig = ( paConfig & RF_PACONFIG_PASELECT_MASK );
+//	paConfig = ( paConfig & RF_PACONFIG_MAX_POWER_MASK ) | 0x70;
 
-	paConfig = ( paConfig & RF_PACONFIG_PASELECT_MASK );
-	paConfig = ( paConfig & RF_PACONFIG_MAX_POWER_MASK ) | 0x70;
-
-	if( config->power < -1 )
-	{
-		config->power = -1;
-	}
-	if( config->power > 14 )
-	{
-		config->power = 14;
-	}
-	paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( unsigned char )( ( unsigned short )( config->power + 1 ) & 0x0F );
+//	if( config->power < -1 )
+//	{
+//		config->power = -1;
+//	}
+//	if( config->power > 14 )
+//	{
+//		config->power = 14;
+//	}
+//	paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( unsigned char )( ( unsigned short )( 1 ) & 0x0F );
  
+    paConfig = 0x00 | (config->power & 0x0F);
 	writeRegister(REG_PACONFIG, paConfig);
+//	writeRegister(REG_PACONFIG, config->power );
 	writeRegister(REG_PADAC, paDac);
 
 	switch( config->modem )

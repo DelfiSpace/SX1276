@@ -69,6 +69,7 @@ public:
 	void enableBitMode(DSPI& bitspi, void(*rxHandler)( uint8_t ), uint8_t(*txHandler)( void ));
 	void disableBitMode();
     void GPIO_IRQHandler( void );
+    void RxLockPll();
 
 private:
 	bool pktFixLen;

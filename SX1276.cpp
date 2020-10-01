@@ -168,6 +168,19 @@ void SX1276::RxChainCalibration( void )
 	}
 }
 
+void SX1276::RxLockPll( void )
+{
+    uint8_t regRxConfigInitVal;
+
+    // Save context
+    regRxConfigInitVal = readRegister( REG_RXCONFIG );
+
+    // set RestartRxWithPllLock
+    writeRegister( REG_RXCONFIG, regRxConfigInitVal  | 0x20);
+
+
+}
+
 unsigned char SX1276::setOpMode( unsigned char opMode )
 {
 	// only enable the interrupts if we are in packet mode
